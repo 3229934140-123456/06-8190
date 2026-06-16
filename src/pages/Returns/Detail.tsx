@@ -96,10 +96,13 @@ export default function ReturnsDetail() {
 
   useEffect(() => {
     const unsubscribe = dataService.subscribe(() => {
+      if (id) {
+        fetchDetail(id)
+      }
       loadRelatedData()
     })
     return unsubscribe
-  }, [id])
+  }, [id, fetchDetail])
 
   const timelineItems: TimelineItem[] = (detail?.timeline || []).map((event, index) => ({
     id: index,

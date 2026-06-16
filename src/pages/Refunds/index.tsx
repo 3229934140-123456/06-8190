@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   RefreshCw,
   Search,
@@ -16,7 +16,7 @@ import DataTable from '@/components/ui/DataTable';
 import Modal from '@/components/ui/Modal';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { cn } from '@/lib/utils';
-import { mockData } from '@/services/mock/data';
+import { dataService } from '@/services/dataService';
 import {
   REFUND_STATUS_OPTIONS,
   PAYMENT_METHOD_OPTIONS,
@@ -50,9 +50,21 @@ export default function Refunds() {
   const [selectedRefund, setSelectedRefund] = useState<RefundRecord | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [refundList, setRefundList] = useState<RefundRecord[]>([...dataService.refundRecords]);
+
+  useEffect(() => {
+    const unsubscribe = dataService.subscribe(() => {
+      setRefundList([...dataService.refundRecords]);
+      if (selectedRefund) {
+        const updated = dataService.refundRecords.find(r => r.id === selectedRefund.id);
+        if (updated) setSelectedRefund(updated);
+      }
+    });
+    return unsubscribe;
+  }, [selectedRefund]);
 
   const filteredData = useMemo(() => {
-    return mockData.refundRecords.filter((item) => {
+    return refundList.filter((item) => {
       if (filters.status && item.status !== filters.status) return false;
       if (filters.paymentMethod && item.originalPaymentMethod !== filters.paymentMethod) return false;
       if (filters.refundMethod && item.refundMethod !== filters.refundMethod) return false;
@@ -69,7 +81,7 @@ export default function Refunds() {
       }
       return true;
     });
-  }, [filters]);
+  }, [filters, refundList]);
 
   const handleViewDetail = (record: RefundRecord) => {
     setSelectedRefund(record);

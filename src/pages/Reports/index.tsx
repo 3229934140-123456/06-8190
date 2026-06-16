@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import {
   Calendar,
@@ -16,7 +16,7 @@ import {
 import dayjs from 'dayjs';
 import KPICard from '@/components/ui/KPICard';
 import { cn } from '@/lib/utils';
-import { mockData } from '@/services/mock/data';
+import { dataService } from '@/services/dataService';
 import { exportReportsExcel } from '@/services/export/excelExport';
 import { downloadReportPdf } from '@/services/export/pdfExport';
 
@@ -26,14 +26,24 @@ export default function Reports() {
     end: dayjs().format('YYYY-MM-DD')
   });
   const [exporting, setExporting] = useState<'excel' | 'pdf' | null>(null);
+  const [reports, setReports] = useState([...dataService.reports]);
+  const [couriers, setCouriers] = useState([...dataService.couriers]);
+
+  useEffect(() => {
+    const unsubscribe = dataService.subscribe(() => {
+      setReports([...dataService.reports]);
+      setCouriers([...dataService.couriers]);
+    });
+    return unsubscribe;
+  }, []);
 
   const filteredReports = useMemo(() => {
-    return mockData.reports.filter((r) => {
+    return reports.filter((r) => {
       const date = dayjs(r.date);
       return date.isAfter(dayjs(dateRange.start).subtract(1, 'day')) &&
         date.isBefore(dayjs(dateRange.end).add(1, 'day'));
     });
-  }, [dateRange]);
+  }, [dateRange, reports]);
 
   const summary = useMemo(() => {
     if (filteredReports.length === 0) {
@@ -217,7 +227,6 @@ export default function Reports() {
   }, [filteredReports]);
 
   const logisticsOption = useMemo(() => {
-    const couriers = mockData.couriers;
     return {
       backgroundColor: 'transparent',
       tooltip: {
@@ -272,7 +281,7 @@ export default function Reports() {
         }
       ]
     };
-  }, []);
+  }, [couriers]);
 
   const handleExportExcel = async () => {
     setExporting('excel');

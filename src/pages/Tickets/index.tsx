@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Filter,
@@ -17,7 +17,7 @@ import Modal from '@/components/ui/Modal';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Timeline, { type TimelineItem } from '@/components/ui/Timeline';
 import { cn } from '@/lib/utils';
-import { mockData } from '@/services/mock/data';
+import { dataService } from '@/services/dataService';
 import {
   TICKET_STATUS_OPTIONS,
   PRIORITY_OPTIONS,
@@ -62,9 +62,23 @@ export default function Tickets() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<LiabilityTicket | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [ticketList, setTicketList] = useState<LiabilityTicket[]>([...dataService.liabilityTickets]);
+
+  useEffect(() => {
+    const unsubscribe = dataService.subscribe(() => {
+      setTicketList([...dataService.liabilityTickets]);
+      if (selectedTicket) {
+        const updated = dataService.liabilityTickets.find(t => t.id === selectedTicket.id);
+        if (updated) setSelectedTicket(updated);
+      }
+    });
+    return unsubscribe;
+  }, [selectedTicket]);
+
+  const pendingCount = ticketList.filter(t => t.status === 'pending').length;
 
   const filteredData = useMemo(() => {
-    return mockData.liabilityTickets.filter((item) => {
+    return ticketList.filter((item) => {
       if (filters.status && item.status !== filters.status) return false;
       if (filters.priority && item.priority !== filters.priority) return false;
       if (filters.liabilityParty && item.liabilityParty !== filters.liabilityParty) return false;
@@ -80,7 +94,7 @@ export default function Tickets() {
       }
       return true;
     });
-  }, [filters]);
+  }, [filters, ticketList]);
 
   const handleViewDetail = (ticket: LiabilityTicket) => {
     setSelectedTicket(ticket);
@@ -259,7 +273,7 @@ export default function Tickets() {
           <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5">
             <AlertTriangle className="h-4 w-4 text-yellow-400" />
             <span className="text-sm text-yellow-400">
-              {mockData.liabilityTickets.filter((t) => t.status === 'pending').length} 待处理
+              {pendingCount} 待处理
             </span>
           </div>
           <button
