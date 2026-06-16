@@ -22,7 +22,7 @@ import Skeleton from '@/components/ui/Skeleton'
 import Modal from '@/components/ui/Modal'
 import { useReturnsStore } from '@/store/returns'
 import { useUserStore } from '@/store/user'
-import { mockData } from '@/services/mock/data'
+import { dataService } from '@/services/dataService'
 import {
   RETURN_STATUS_LABEL,
   RETURN_STATUS_COLOR,
@@ -61,26 +61,45 @@ const STATUS_TO_BADGE: Record<ReturnStatus, 'pending' | 'processing' | 'approved
 export default function ReturnsDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { detail, loading, fetchDetail, clearDetail, approve, updateStatus } = useReturnsStore()
+  const { detail, loading, fetchDetail, clearDetail, approve, updateStatus, inspect } = useReturnsStore()
   const { hasPermission } = useUserStore()
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
+  const [showInspectModal, setShowInspectModal] = useState(false)
+  const [inspectResult, setInspectResult] = useState<'passed' | 'failed'>('passed')
+  const [damageLevel, setDamageLevel] = useState<'none' | 'minor' | 'moderate' | 'severe'>('none')
+  const [damageDescription, setDamageDescription] = useState('')
   const [remark, setRemark] = useState('')
   const [rejectReason, setRejectReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [logistics, setLogistics] = useState<ReturnType<typeof dataService.getLogisticsOrderByReturnId>>(undefined)
+  const [inspection, setInspection] = useState<ReturnType<typeof dataService.getInspectionRecordByReturnId>>(undefined)
+  const [refund, setRefund] = useState<ReturnType<typeof dataService.getRefundRecordByReturnId>>(undefined)
+
+  const loadRelatedData = () => {
+    if (id) {
+      setLogistics(dataService.getLogisticsOrderByReturnId(id))
+      setInspection(dataService.getInspectionRecordByReturnId(id))
+      setRefund(dataService.getRefundRecordByReturnId(id))
+    }
+  }
 
   useEffect(() => {
     if (id) {
       fetchDetail(id)
+      loadRelatedData()
     }
     return () => {
       clearDetail()
     }
   }, [id, fetchDetail, clearDetail])
 
-  const logistics = mockData.logisticsOrders.find(l => l.returnId === id)
-  const inspection = mockData.inspectionRecords.find(i => i.returnId === id)
-  const refund = mockData.refundRecords.find(r => r.returnId === id)
+  useEffect(() => {
+    const unsubscribe = dataService.subscribe(() => {
+      loadRelatedData()
+    })
+    return unsubscribe
+  }, [id])
 
   const timelineItems: TimelineItem[] = (detail?.timeline || []).map((event, index) => ({
     id: index,
@@ -145,39 +164,28 @@ export default function ReturnsDetail() {
     try {
       await updateStatus(id, 'inspecting', '开始商品验收')
       await fetchDetail(id)
+      setShowInspectModal(true)
+      setInspectResult('passed')
+      setDamageLevel('none')
+      setDamageDescription('')
     } finally {
       setActionLoading(false)
     }
   }
 
-  const handleInspectionPass = async () => {
-    if (!id) return
+  const handleSubmitInspection = async () => {
+    if (!id || (inspectResult === 'failed' && !damageDescription.trim())) return
     setActionLoading(true)
     try {
-      await updateStatus(id, 'inspection_passed', '验收通过，商品完好')
+      await inspect(
+        id,
+        inspectResult,
+        inspectResult === 'passed' ? 'none' : damageLevel,
+        damageDescription || '商品完好无损'
+      )
       await fetchDetail(id)
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleInspectionFail = async () => {
-    if (!id) return
-    setActionLoading(true)
-    try {
-      await updateStatus(id, 'inspection_failed', '验收不通过，存在损坏')
-      await fetchDetail(id)
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  const handleRefund = async () => {
-    if (!id) return
-    setActionLoading(true)
-    try {
-      await updateStatus(id, 'refunding', '退款处理中')
-      await fetchDetail(id)
+      setShowInspectModal(false)
+      setDamageDescription('')
     } finally {
       setActionLoading(false)
     }
@@ -195,11 +203,8 @@ export default function ReturnsDetail() {
   }
 
   const canApprove = detail?.status === 'pending_review' || detail?.status === 'reviewing'
-  const canCreateLogistics = detail?.status === 'approved'
   const canReceive = detail?.status === 'in_transit' || detail?.status === 'picked_up'
-  const canInspect = detail?.status === 'warehouse_received'
-  const canInspectionPass = detail?.status === 'inspecting'
-  const canRefund = detail?.status === 'inspection_passed'
+  const canInspect = detail?.status === 'warehouse_received' || detail?.status === 'inspecting'
   const canComplete = detail?.status === 'refund_completed'
 
   if (loading && !detail) {
@@ -276,16 +281,6 @@ export default function ReturnsDetail() {
               </button>
             </>
           )}
-          {canCreateLogistics && hasPermission('logistics:create') && (
-            <button
-              onClick={handleCreateLogistics}
-              disabled={actionLoading}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 transition-colors disabled:opacity-50"
-            >
-              <Truck className="h-4 w-4" />
-              {actionLoading ? '处理中...' : '生成物流单'}
-            </button>
-          )}
           {canReceive && hasPermission('warehouse:view') && (
             <button
               onClick={handleReceive}
@@ -304,36 +299,6 @@ export default function ReturnsDetail() {
             >
               <ShieldCheck className="h-4 w-4" />
               {actionLoading ? '处理中...' : '开始验收'}
-            </button>
-          )}
-          {canInspectionPass && hasPermission('warehouse:inspect') && (
-            <>
-              <button
-                onClick={handleInspectionFail}
-                disabled={actionLoading}
-                className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-              >
-                <XCircle className="h-4 w-4" />
-                验收不通过
-              </button>
-              <button
-                onClick={handleInspectionPass}
-                disabled={actionLoading}
-                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                {actionLoading ? '处理中...' : '验收通过'}
-              </button>
-            </>
-          )}
-          {canRefund && hasPermission('finance:refund') && (
-            <button
-              onClick={handleRefund}
-              disabled={actionLoading}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 transition-colors disabled:opacity-50"
-            >
-              <Wallet className="h-4 w-4" />
-              {actionLoading ? '处理中...' : '发起退款'}
             </button>
           )}
           {canComplete && (
@@ -748,6 +713,113 @@ export default function ReturnsDetail() {
             >
               <XCircle className="h-4 w-4" />
               {actionLoading ? '处理中...' : '确认驳回'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showInspectModal}
+        onClose={() => !actionLoading && setShowInspectModal(false)}
+        title="商品验收"
+        description="请选择验收结果"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-300">验收结果</label>
+            <div className="flex gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="inspectResult"
+                  value="passed"
+                  checked={inspectResult === 'passed'}
+                  onChange={() => {
+                    setInspectResult('passed')
+                    setDamageLevel('none')
+                    setDamageDescription('')
+                  }}
+                  className="h-4 w-4 text-emerald-500 focus:ring-emerald-500"
+                />
+                <span className="text-sm text-white">验收通过</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="inspectResult"
+                  value="failed"
+                  checked={inspectResult === 'failed'}
+                  onChange={() => setInspectResult('failed')}
+                  className="h-4 w-4 text-red-500 focus:ring-red-500"
+                />
+                <span className="text-sm text-white">验收不通过</span>
+              </label>
+            </div>
+          </div>
+
+          {inspectResult === 'failed' && (
+            <>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-300">损坏等级</label>
+                <select
+                  value={damageLevel}
+                  onChange={(e) => setDamageLevel(e.target.value as any)}
+                  className="w-full rounded-lg border border-dark-700 bg-dark-800 px-3 py-2.5 text-sm text-white focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                >
+                  <option value="minor">轻微损坏</option>
+                  <option value="moderate">中度损坏</option>
+                  <option value="severe">严重损坏</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-300">损坏描述</label>
+                <textarea
+                  value={damageDescription}
+                  onChange={(e) => setDamageDescription(e.target.value)}
+                  rows={3}
+                  placeholder="请详细描述损坏情况..."
+                  className="w-full rounded-lg border border-dark-700 bg-dark-800 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none"
+                />
+              </div>
+            </>
+          )}
+
+          {inspectResult === 'passed' && (
+            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-4">
+              <p className="text-sm text-emerald-400">
+                <CheckCircle2 className="inline h-4 w-4 mr-1.5" />
+                验收通过后将自动触发退款流程，预计1-3个工作日内退款将原路返回客户账户
+              </p>
+            </div>
+          )}
+
+          {inspectResult === 'failed' && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-4">
+              <p className="text-sm text-red-400">
+                <AlertCircle className="inline h-4 w-4 mr-1.5" />
+                验收不通过后将自动生成责任判定工单，分配客服人员跟进处理
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => setShowInspectModal(false)}
+              disabled={actionLoading}
+              className="rounded-lg border border-dark-700 bg-dark-800 px-5 py-2.5 text-sm font-medium text-slate-300 hover:bg-dark-700 transition-colors disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSubmitInspection}
+              disabled={actionLoading || (inspectResult === 'failed' && !damageDescription.trim())}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white transition-colors disabled:opacity-50",
+                inspectResult === 'passed' ? "bg-emerald-600 hover:bg-emerald-500" : "bg-red-600 hover:bg-red-500"
+              )}
+            >
+              {inspectResult === 'passed' ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+              {actionLoading ? '处理中...' : '确认提交'}
             </button>
           </div>
         </div>

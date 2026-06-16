@@ -228,13 +228,13 @@ const WAREHOUSE_ADDRESS: Address = {
 }
 
 export const couriers: Courier[] = [
-  { id: 'CR001', name: '顺丰速运', efficiencyScore: 95, costScore: 72, overallScore: 87, avgDeliveryDays: 2, avgCost: 18 },
-  { id: 'CR002', name: '京东物流', efficiencyScore: 92, costScore: 78, overallScore: 87, avgDeliveryDays: 2, avgCost: 15 },
-  { id: 'CR003', name: '圆通速递', efficiencyScore: 78, costScore: 90, overallScore: 82, avgDeliveryDays: 4, avgCost: 10 },
-  { id: 'CR004', name: '中通快递', efficiencyScore: 80, costScore: 92, overallScore: 84, avgDeliveryDays: 4, avgCost: 9 },
-  { id: 'CR005', name: '韵达快递', efficiencyScore: 76, costScore: 88, overallScore: 80, avgDeliveryDays: 5, avgCost: 9 },
-  { id: 'CR006', name: '德邦快递', efficiencyScore: 85, costScore: 75, overallScore: 81, avgDeliveryDays: 3, avgCost: 14 },
-  { id: 'CR007', name: '邮政EMS', efficiencyScore: 70, costScore: 85, overallScore: 76, avgDeliveryDays: 6, avgCost: 12 },
+  { id: 'CR001', name: '顺丰速运', code: 'SF', efficiencyScore: 95, costScore: 72, overallScore: 87, avgDeliveryDays: 2, avgCost: 18, coverageAreas: ['北京市', '上海市', '广州市', '深圳市'], maxWeight: 50, supportsPickup: true, insuranceRate: 0.01 },
+  { id: 'CR002', name: '京东物流', code: 'JD', efficiencyScore: 92, costScore: 78, overallScore: 87, avgDeliveryDays: 2, avgCost: 15, coverageAreas: ['北京市', '上海市', '广州市', '深圳市', '杭州市'], maxWeight: 50, supportsPickup: true, insuranceRate: 0.008 },
+  { id: 'CR003', name: '圆通速递', code: 'YT', efficiencyScore: 78, costScore: 90, overallScore: 82, avgDeliveryDays: 4, avgCost: 10, coverageAreas: ['北京市', '上海市', '广州市', '深圳市', '杭州市', '南京市'], maxWeight: 30, supportsPickup: true, insuranceRate: 0.005 },
+  { id: 'CR004', name: '中通快递', code: 'ZTO', efficiencyScore: 80, costScore: 92, overallScore: 84, avgDeliveryDays: 4, avgCost: 9, coverageAreas: ['北京市', '上海市', '广州市', '深圳市', '杭州市', '南京市', '成都市'], maxWeight: 30, supportsPickup: true, insuranceRate: 0.005 },
+  { id: 'CR005', name: '韵达快递', code: 'YD', efficiencyScore: 76, costScore: 88, overallScore: 80, avgDeliveryDays: 5, avgCost: 9, coverageAreas: ['北京市', '上海市', '广州市', '深圳市', '杭州市', '武汉市'], maxWeight: 30, supportsPickup: true, insuranceRate: 0.005 },
+  { id: 'CR006', name: '德邦快递', code: 'DB', efficiencyScore: 85, costScore: 75, overallScore: 81, avgDeliveryDays: 3, avgCost: 14, coverageAreas: ['北京市', '上海市', '广州市', '深圳市'], maxWeight: 100, supportsPickup: true, insuranceRate: 0.006 },
+  { id: 'CR007', name: '邮政EMS', code: 'EMS', efficiencyScore: 70, costScore: 85, overallScore: 76, avgDeliveryDays: 6, avgCost: 12, coverageAreas: ['北京市', '上海市', '广州市', '深圳市', '全国'], maxWeight: 50, supportsPickup: false, insuranceRate: 0.01 },
 ]
 
 const returnRequests: ReturnRequest[] = []

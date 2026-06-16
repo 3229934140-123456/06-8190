@@ -27,7 +27,7 @@ export type DamageLevel = 'none' | 'minor' | 'moderate' | 'severe';
 
 export type PaymentMethod = 'alipay' | 'wechat' | 'bank' | 'points';
 
-export type RefundMethod = 'original' | 'points';
+export type RefundMethod = 'original' | 'points' | 'balance' | 'bank_transfer';
 
 export type RefundStatus = 'pending' | 'processing' | 'success' | 'failed';
 
@@ -90,11 +90,16 @@ export interface ReturnRequest {
 export interface Courier {
   id: string;
   name: string;
+  code: string;
   efficiencyScore: number;
   costScore: number;
   overallScore: number;
   avgDeliveryDays: number;
   avgCost: number;
+  coverageAreas: string[];
+  maxWeight: number;
+  supportsPickup: boolean;
+  insuranceRate: number;
 }
 
 export interface LogisticsOrder {
@@ -298,6 +303,8 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
 export const REFUND_METHOD_LABEL: Record<RefundMethod, string> = {
   original: '原路退回',
   points: '积分补偿',
+  balance: '余额退款',
+  bank_transfer: '银行转账',
 };
 
 export const LIABILITY_PARTY_LABEL: Record<LiabilityParty, string> = {

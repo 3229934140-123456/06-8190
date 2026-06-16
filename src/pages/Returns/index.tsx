@@ -6,10 +6,13 @@ import {
   RefreshCw,
   ChevronDown,
   Calendar,
+  Download,
 } from 'lucide-react'
 import DataTable, { type Column } from '@/components/ui/DataTable'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { useReturnsStore } from '@/store/returns'
+import { dataService } from '@/services/dataService'
+import { exportFilteredReturnsExcel } from '@/services/export/excelExport'
 import {
   RETURN_STATUS_LABEL,
   RETURN_STATUS_COLOR,
@@ -85,6 +88,53 @@ export default function ReturnsList() {
     setFilters,
     setPagination,
   } = useReturnsStore()
+  const [exporting, setExporting] = useState(false)
+
+  const getFilteredData = (): ReturnRequest[] => {
+    let data = [...dataService.returnRequests]
+
+    if (filters.status) {
+      data = data.filter(item => item.status === filters.status)
+    }
+    if (filters.keyword) {
+      const kw = filters.keyword.toLowerCase()
+      data = data.filter(
+        item =>
+          item.id.toLowerCase().includes(kw) ||
+          item.orderId.toLowerCase().includes(kw) ||
+          item.productName.toLowerCase().includes(kw) ||
+          item.customerName.toLowerCase().includes(kw)
+      )
+    }
+    if (filters.customerLevel) {
+      data = data.filter(item => item.customerLevel === filters.customerLevel)
+    }
+    if (filters.returnType) {
+      data = data.filter(item => item.returnType === filters.returnType)
+    }
+    if (filters.dateRange && filters.dateRange[0] && filters.dateRange[1]) {
+      data = data.filter(
+        item => item.createdAt >= filters.dateRange![0] && item.createdAt <= filters.dateRange![1]
+      )
+    }
+    return data
+  }
+
+  const handleExportExcel = async () => {
+    setExporting(true)
+    try {
+      const filteredData = getFilteredData()
+      await exportFilteredReturnsExcel(filteredData)
+      dataService.addOperationLog(
+        '批量导出',
+        '退货管理',
+        'batch_export',
+        `导出筛选退货数据 ${filteredData.length} 条`
+      )
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const [showFilters, setShowFilters] = useState(false)
   const [keyword, setKeyword] = useState(filters.keyword || '')
@@ -252,6 +302,15 @@ export default function ReturnsList() {
             className="rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-primary-500 hover:shadow-lg hover:shadow-primary-500/30"
           >
             查询
+          </button>
+
+          <button
+            onClick={handleExportExcel}
+            disabled={exporting}
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-emerald-500 hover:shadow-lg hover:shadow-emerald-500/30 disabled:opacity-50"
+          >
+            <Download className={cn('h-4 w-4', exporting && 'animate-spin')} />
+            {exporting ? '导出中...' : '导出Excel'}
           </button>
         </div>
 

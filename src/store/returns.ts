@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { mockData } from '@/services/mock/data'
-import type { ReturnRequest, ReturnStatus } from '@/types'
+import { dataService } from '@/services/dataService'
+import type { ReturnRequest, ReturnStatus, CustomerLevel, ReturnType } from '@/types'
 
 interface ReturnsState {
   list: ReturnRequest[]
@@ -22,9 +22,10 @@ interface ReturnsState {
   fetchDetail: (id: string) => Promise<void>
   setFilters: (filters: Partial<ReturnsState['filters']>) => void
   setPagination: (pagination: Partial<ReturnsState['pagination']>) => void
-  approve: (id: string, remark?: string) => Promise<void>
+  approve: (id: string, remark?: string) => Promise<{ success: boolean; logisticsOrder?: any }>
   reject: (id: string, remark: string) => Promise<void>
   updateStatus: (id: string, status: ReturnStatus, remark?: string) => Promise<void>
+  inspect: (id: string, result: 'passed' | 'failed', damageLevel: 'none' | 'minor' | 'moderate' | 'severe', damageDescription: string) => Promise<void>
   clearDetail: () => void
 }
 
@@ -44,7 +45,7 @@ export const useReturnsStore = create<ReturnsState>((set, get) => ({
     await new Promise(resolve => setTimeout(resolve, 300))
 
     const { filters, pagination } = get()
-    let data = [...mockData.returnRequests]
+    let data = [...dataService.returnRequests]
 
     if (filters.status) {
       data = data.filter(item => item.status === filters.status)
@@ -81,73 +82,89 @@ export const useReturnsStore = create<ReturnsState>((set, get) => ({
   fetchDetail: async (id: string) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 200))
-    const detail = mockData.returnRequests.find(item => item.id === id) || null
+    const detail = dataService.getReturnRequestById(id) || null
     set({ detail, loading: false })
   },
 
   setFilters: (filters) => {
     set(state => ({ filters: { ...state.filters, ...filters }, pagination: { ...state.pagination, page: 1 } }))
+    get().fetchList()
   },
 
   setPagination: (pagination) => {
     set(state => ({ pagination: { ...state.pagination, ...pagination } }))
+    get().fetchList()
   },
 
   approve: async (id: string, remark?: string) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
-    const item = mockData.returnRequests.find(r => r.id === id)
-    if (item) {
-      item.status = 'approved'
-      item.updatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19)
-      item.timeline.push({
-        status: 'approved',
-        timestamp: item.updatedAt,
-        operator: '当前用户',
-        remark: remark || '审批通过',
-      })
-    }
+    
+    const returnRequest = dataService.approveReturn(id, remark)
+    
+    // 等待自动创建物流单完成
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
     await get().fetchList()
+    const { detail } = get()
+    if (detail && detail.id === id) {
+      set({ detail: dataService.getReturnRequestById(id) || null })
+    }
+    
     set({ loading: false })
+    return { success: !!returnRequest }
   },
 
   reject: async (id: string, remark: string) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
-    const item = mockData.returnRequests.find(r => r.id === id)
-    if (item) {
-      item.status = 'rejected'
-      item.updatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19)
-      item.timeline.push({
-        status: 'rejected',
-        timestamp: item.updatedAt,
-        operator: '当前用户',
-        remark,
-      })
-    }
+    dataService.rejectReturn(id, remark)
     await get().fetchList()
+    const { detail } = get()
+    if (detail && detail.id === id) {
+      set({ detail: dataService.getReturnRequestById(id) || null })
+    }
     set({ loading: false })
   },
 
   updateStatus: async (id: string, status: ReturnStatus, remark?: string) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
-    const item = mockData.returnRequests.find(r => r.id === id)
-    if (item) {
-      item.status = status
-      item.updatedAt = new Date().toISOString().replace('T', ' ').substring(0, 19)
-      item.timeline.push({
-        status,
-        timestamp: item.updatedAt,
-        operator: '当前用户',
-        remark,
-      })
-    }
+    dataService.updateReturnStatus(id, status, remark)
+    dataService.addOperationLog(
+      '更新状态',
+      '退货管理',
+      id,
+      `状态变更为：${status}${remark ? `，备注：${remark}` : ''}`
+    )
+    await get().fetchList()
     const { detail } = get()
     if (detail && detail.id === id) {
-      set({ detail: item || null })
+      set({ detail: dataService.getReturnRequestById(id) || null })
     }
+    set({ loading: false })
+  },
+
+  inspect: async (
+    id: string,
+    result: 'passed' | 'failed',
+    damageLevel: 'none' | 'minor' | 'moderate' | 'severe',
+    damageDescription: string
+  ) => {
+    set({ loading: true })
+    await new Promise(resolve => setTimeout(resolve, 300))
+    
+    dataService.createInspectionRecord(id, result, damageLevel, damageDescription)
+    
+    // 等待自动业务联动完成
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
     await get().fetchList()
+    const { detail } = get()
+    if (detail && detail.id === id) {
+      set({ detail: dataService.getReturnRequestById(id) || null })
+    }
+    
     set({ loading: false })
   },
 

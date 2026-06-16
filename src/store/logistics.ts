@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { mockData } from '@/services/mock/data'
+import { dataService } from '@/services/dataService'
 import type { LogisticsOrder, Courier, LogisticsStatus } from '@/types'
 
 interface LogisticsState {
@@ -25,6 +25,7 @@ interface LogisticsState {
   setPagination: (pagination: Partial<LogisticsState['pagination']>) => void
   updateOrderStatus: (id: string, status: LogisticsStatus) => Promise<void>
   createOrder: (returnId: string, courierId: string) => Promise<LogisticsOrder | null>
+  subscribeToUpdates: () => () => void
   clearOrderDetail: () => void
 }
 
@@ -45,7 +46,7 @@ export const useLogisticsStore = create<LogisticsState>((set, get) => ({
     await new Promise(resolve => setTimeout(resolve, 300))
 
     const { filters, pagination } = get()
-    let data = [...mockData.logisticsOrders]
+    let data = [...dataService.logisticsOrders]
 
     if (filters.status) {
       data = data.filter(item => item.status === filters.status)
@@ -79,14 +80,14 @@ export const useLogisticsStore = create<LogisticsState>((set, get) => ({
   fetchOrderDetail: async (id: string) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 200))
-    const orderDetail = mockData.logisticsOrders.find(item => item.id === id) || null
+    const orderDetail = dataService.getLogisticsOrderById(id) || null
     set({ orderDetail, loading: false })
   },
 
   fetchCouriers: async () => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 200))
-    set({ couriers: mockData.couriers, loading: false })
+    set({ couriers: dataService.couriers, loading: false })
   },
 
   setFilters: (filters) => {
@@ -100,13 +101,15 @@ export const useLogisticsStore = create<LogisticsState>((set, get) => ({
   updateOrderStatus: async (id: string, status: LogisticsStatus) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
-    const order = mockData.logisticsOrders.find(o => o.id === id)
+    const order = dataService.logisticsOrders.find(o => o.id === id)
     if (order) {
       order.status = status
+      dataService.persist()
+      dataService.notifyListeners()
     }
     const { orderDetail } = get()
     if (orderDetail && orderDetail.id === id) {
-      set({ orderDetail: order || null })
+      set({ orderDetail: dataService.getLogisticsOrderById(id) || null })
     }
     await get().fetchOrders()
     set({ loading: false })
@@ -115,58 +118,18 @@ export const useLogisticsStore = create<LogisticsState>((set, get) => ({
   createOrder: async (returnId: string, courierId: string) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
-    const returnRequest = mockData.returnRequests.find(r => r.id === returnId)
-    const courier = mockData.couriers.find(c => c.id === courierId)
-    if (!returnRequest || !courier) {
-      set({ loading: false })
-      return null
-    }
-
-    const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
-    const newOrder: LogisticsOrder = {
-      id: `LO${Date.now()}`,
-      returnId,
-      orderId: returnRequest.orderId,
-      courierId,
-      courierName: courier.name,
-      trackingNumber: `${courier.name.substring(0, 2)}${Math.floor(Math.random() * 10000000000)}`,
-      estimatedCost: courier.avgCost,
-      actualCost: 0,
-      estimatedDays: courier.avgDeliveryDays,
-      actualDays: 0,
-      status: 'created',
-      pickupAddress: {
-        id: `ADDR${Date.now()}1`,
-        province: '北京市',
-        city: '北京市',
-        district: '朝阳区',
-        detail: '示例地址',
-        contactPhone: '13800138000',
-        contactName: returnRequest.customerName,
-      },
-      returnAddress: {
-        id: `ADDR${Date.now()}2`,
-        province: '上海市',
-        city: '上海市',
-        district: '浦东新区',
-        detail: '张江高科技园区博云路2号',
-        contactPhone: '021-88889999',
-        contactName: '仓库收',
-      },
-      createdAt: now,
-    }
-    mockData.logisticsOrders.unshift(newOrder)
-    returnRequest.status = 'logistics_created'
-    returnRequest.updatedAt = now
-    returnRequest.timeline.push({
-      status: 'logistics_created',
-      timestamp: now,
-      operator: '当前用户',
-      remark: `已创建物流单 ${newOrder.id}`,
-    })
+    const newOrder = dataService.createLogisticsOrder(returnId, courierId)
     await get().fetchOrders()
     set({ loading: false })
     return newOrder
+  },
+
+  subscribeToUpdates: () => {
+    const unsubscribe = dataService.subscribe(() => {
+      get().fetchOrders()
+      get().fetchCouriers()
+    })
+    return unsubscribe
   },
 
   clearOrderDetail: () => {

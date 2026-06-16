@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { mockData } from '@/services/mock/data'
+import { dataService } from '@/services/dataService'
 import type { ReportData } from '@/types'
 
 interface ReportsState {
@@ -33,7 +33,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
     const { dateRange } = get()
-    let data = [...mockData.reports]
+    let data = [...dataService.reports]
     if (dateRange[0] && dateRange[1]) {
       data = data.filter(item => item.date >= dateRange[0] && item.date <= dateRange[1])
     }
@@ -44,7 +44,7 @@ export const useReportsStore = create<ReportsState>((set, get) => ({
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
     const { dateRange } = get()
-    let data = [...mockData.reports]
+    let data = [...dataService.reports]
     if (dateRange[0] && dateRange[1]) {
       data = data.filter(item => item.date >= dateRange[0] && item.date <= dateRange[1])
     }

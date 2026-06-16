@@ -9,8 +9,11 @@ import type {
   OperationLog,
   ReportData,
   Courier,
+  TimelineEvent,
+  Address,
 } from '@/types';
 import { mockData } from '../mock/data';
+import { dataService } from '../dataService';
 import {
   RETURN_STATUS_LABEL,
   LOGISTICS_STATUS_LABEL,
@@ -630,4 +633,283 @@ export function arrayToSheet<T>(
     rowMapper,
   };
   return createSheet(config);
+}
+
+function formatAddress(address?: Address): string {
+  if (!address) return '-';
+  return `${address.province}${address.city}${address.district}${address.detail}，联系人：${address.contactName}，电话：${address.contactPhone}`;
+}
+
+export function generateFilteredReturnsSheet(
+  data: ReturnRequest[]
+): ExcelSheetConfig<ReturnRequest> {
+  return {
+    name: '退货列表',
+    headers: [
+      '退货单号',
+      '订单号',
+      '订单日期',
+      '商品ID',
+      '商品名称',
+      '商品分类',
+      '商品价格(元)',
+      '客户ID',
+      '客户姓名',
+      '客户等级',
+      '退货原因',
+      '退货类型',
+      '是否在保',
+      '折旧率',
+      '折旧金额(元)',
+      '退款金额(元)',
+      '当前状态',
+      '创建时间',
+      '更新时间',
+    ],
+    data,
+    rowMapper: (item) => [
+      item.id,
+      item.orderId,
+      formatDate(item.orderDate),
+      item.productId,
+      item.productName,
+      item.productCategory,
+      formatCurrency(item.productPrice),
+      item.customerId,
+      item.customerName,
+      CUSTOMER_LEVEL_LABEL[item.customerLevel],
+      item.returnReason,
+      RETURN_TYPE_LABEL[item.returnType],
+      item.inWarranty ? '是' : '否',
+      formatPercent(item.depreciationRate),
+      formatCurrency(item.depreciationAmount),
+      formatCurrency(item.refundAmount),
+      RETURN_STATUS_LABEL[item.status],
+      formatDate(item.createdAt),
+      formatDate(item.updatedAt),
+    ],
+    columnWidths: [
+      14, 14, 20, 12, 28, 12, 12, 12, 12, 10,
+      14, 10, 8, 8, 12, 12, 14, 20, 20,
+    ],
+  };
+}
+
+export function generateFilteredLogisticsSheet(
+  data: LogisticsOrder[]
+): ExcelSheetConfig<LogisticsOrder> {
+  return {
+    name: '物流信息',
+    headers: [
+      '退货单号',
+      '物流单号',
+      '快递公司',
+      '运单号',
+      '取件地址',
+      '退货地址',
+      '预估费用(元)',
+      '实际费用(元)',
+      '预估天数',
+      '实际天数',
+      '物流状态',
+      '创建时间',
+    ],
+    data,
+    rowMapper: (item) => [
+      item.returnId,
+      item.id,
+      item.courierName,
+      item.trackingNumber,
+      formatAddress(item.pickupAddress),
+      formatAddress(item.returnAddress),
+      formatCurrency(item.estimatedCost),
+      item.actualCost > 0 ? formatCurrency(item.actualCost) : '-',
+      item.estimatedDays,
+      item.actualDays > 0 ? item.actualDays : '-',
+      LOGISTICS_STATUS_LABEL[item.status],
+      formatDate(item.createdAt),
+    ],
+    columnWidths: [14, 14, 12, 20, 40, 40, 12, 12, 10, 10, 10, 20],
+  };
+}
+
+export function generateFilteredInspectionSheet(
+  data: InspectionRecord[]
+): ExcelSheetConfig<InspectionRecord> {
+  return {
+    name: '验收记录',
+    headers: [
+      '退货单号',
+      '验收单号',
+      '验收结果',
+      '损坏等级',
+      '损坏描述',
+      '检验员',
+      '收货数量',
+      '验收时间',
+    ],
+    data,
+    rowMapper: (item) => [
+      item.returnId,
+      item.id,
+      INSPECTION_RESULT_LABEL[item.inspectionResult],
+      DAMAGE_LEVEL_LABEL[item.damageLevel],
+      item.damageDescription,
+      item.inspector,
+      item.receivedQuantity,
+      formatDate(item.inspectedAt),
+    ],
+    columnWidths: [14, 14, 10, 10, 40, 12, 10, 20],
+  };
+}
+
+export function generateFilteredRefundSheet(
+  data: RefundRecord[]
+): ExcelSheetConfig<RefundRecord> {
+  return {
+    name: '退款记录',
+    headers: [
+      '退货单号',
+      '退款单号',
+      '退款方式',
+      '退款金额(元)',
+      '原支付方式',
+      '积分补偿',
+      '退款状态',
+      '交易流水号',
+      '处理时间',
+    ],
+    data,
+    rowMapper: (item) => [
+      item.returnId,
+      item.id,
+      REFUND_METHOD_LABEL[item.refundMethod],
+      formatCurrency(item.refundAmount),
+      PAYMENT_METHOD_LABEL[item.originalPaymentMethod],
+      item.pointsAmount > 0 ? `${item.pointsAmount}积分` : '-',
+      REFUND_STATUS_LABEL[item.status],
+      item.transactionId,
+      formatDate(item.processedAt),
+    ],
+    columnWidths: [14, 14, 12, 12, 12, 12, 10, 24, 20],
+  };
+}
+
+export function generateFilteredLiabilitySheet(
+  data: LiabilityTicket[]
+): ExcelSheetConfig<LiabilityTicket> {
+  return {
+    name: '责任工单',
+    headers: [
+      '退货单号',
+      '工单号',
+      '分配人',
+      '责任方',
+      '优先级',
+      '工单状态',
+      '问题描述',
+      '处理结果',
+      '创建时间',
+      '解决时间',
+    ],
+    data,
+    rowMapper: (item) => [
+      item.returnId,
+      item.id,
+      item.assignee,
+      LIABILITY_PARTY_LABEL[item.liabilityParty],
+      PRIORITY_LABEL[item.priority],
+      TICKET_STATUS_LABEL[item.status],
+      item.description,
+      item.resolution || '-',
+      formatDate(item.createdAt),
+      item.resolvedAt ? formatDate(item.resolvedAt) : '-',
+    ],
+    columnWidths: [14, 14, 10, 12, 8, 10, 30, 30, 20, 20],
+  };
+}
+
+export function generateFilteredTimelineSheet(
+  data: { returnId: string; timeline: TimelineEvent[] }[]
+): ExcelSheetConfig<{ returnId: string; index: number; event: TimelineEvent }> {
+  const flatData: { returnId: string; index: number; event: TimelineEvent }[] = [];
+  data.forEach((item) => {
+    item.timeline.forEach((event, idx) => {
+      flatData.push({
+        returnId: item.returnId,
+        index: idx + 1,
+        event,
+      });
+    });
+  });
+
+  return {
+    name: '状态时间线',
+    headers: [
+      '退货单号',
+      '序号',
+      '状态',
+      '操作人',
+      '时间',
+      '备注',
+    ],
+    data: flatData,
+    rowMapper: (item) => [
+      item.returnId,
+      item.index,
+      RETURN_STATUS_LABEL[item.event.status],
+      item.event.operator,
+      formatDate(item.event.timestamp),
+      item.event.remark || '-',
+    ],
+    columnWidths: [14, 8, 16, 12, 20, 30],
+  };
+}
+
+export async function exportFilteredReturnsExcel(
+  returns: ReturnRequest[],
+  fileName?: string
+): Promise<void> {
+  const returnIds = returns.map((r) => r.id);
+
+  const logisticsOrders = dataService.logisticsOrders.filter((lo) =>
+    returnIds.includes(lo.returnId)
+  );
+  const inspectionRecords = dataService.inspectionRecords.filter((ir) =>
+    returnIds.includes(ir.returnId)
+  );
+  const refundRecords = dataService.refundRecords.filter((rr) =>
+    returnIds.includes(rr.returnId)
+  );
+  const liabilityTickets = dataService.liabilityTickets.filter((lt) =>
+    returnIds.includes(lt.returnId)
+  );
+
+  const timelineData = returns.map((r) => ({
+    returnId: r.id,
+    timeline: r.timeline,
+  }));
+
+  const wb = XLSX.utils.book_new();
+
+  const sheet1 = generateFilteredReturnsSheet(returns);
+  XLSX.utils.book_append_sheet(wb, createSheet(sheet1), sheet1.name);
+
+  const sheet2 = generateFilteredLogisticsSheet(logisticsOrders);
+  XLSX.utils.book_append_sheet(wb, createSheet(sheet2), sheet2.name);
+
+  const sheet3 = generateFilteredInspectionSheet(inspectionRecords);
+  XLSX.utils.book_append_sheet(wb, createSheet(sheet3), sheet3.name);
+
+  const sheet4 = generateFilteredRefundSheet(refundRecords);
+  XLSX.utils.book_append_sheet(wb, createSheet(sheet4), sheet4.name);
+
+  const sheet5 = generateFilteredLiabilitySheet(liabilityTickets);
+  XLSX.utils.book_append_sheet(wb, createSheet(sheet5), sheet5.name);
+
+  const sheet6 = generateFilteredTimelineSheet(timelineData);
+  XLSX.utils.book_append_sheet(wb, createSheet(sheet6), sheet6.name);
+
+  const finalFileName = fileName || `筛选退货数据_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  downloadWorkbook(wb, finalFileName);
 }

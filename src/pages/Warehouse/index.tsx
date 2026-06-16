@@ -17,10 +17,7 @@ import StatusBadge from '@/components/ui/StatusBadge'
 import KPICard from '@/components/ui/KPICard'
 import Skeleton from '@/components/ui/Skeleton'
 import { useReturnsStore } from '@/store/returns'
-import {
-  createInspectionRecord,
-  getInspectionRecordByReturnId,
-} from '@/services/api'
+import { dataService } from '@/services/dataService'
 import {
   RETURN_STATUS_LABEL,
   DAMAGE_LEVEL_LABEL,
@@ -59,11 +56,21 @@ export default function Warehouse() {
     }
   }, [activeTab])
 
+  useEffect(() => {
+    const unsubscribe = dataService.subscribe(() => {
+      fetchList()
+      if (activeTab === 'records') {
+        loadInspectionRecords()
+      }
+    })
+    return unsubscribe
+  }, [fetchList, activeTab])
+
   const loadInspectionRecords = async () => {
     setLoadingRecords(true)
     const records: InspectionRecord[] = []
     for (const req of list) {
-      const record = await getInspectionRecordByReturnId(req.id)
+      const record = dataService.getInspectionRecordByReturnId(req.id)
       if (record) {
         records.push(record)
       }
@@ -86,23 +93,12 @@ export default function Warehouse() {
     if (!selectedItem) return
     setSubmitting(true)
 
-    const now = new Date().toISOString().replace('T', ' ').substring(0, 19)
-    await createInspectionRecord({
-      returnId: selectedItem.id,
-      inspector: '当前用户',
+    dataService.createInspectionRecord(
+      selectedItem.id,
       inspectionResult,
       damageLevel,
-      damageDescription:
-        inspectionResult === 'passed' ? '商品外观完好，配件齐全，功能正常' : damageDescription,
-      damageImages: [],
-      receivedQuantity: 1,
-      inspectedAt: now,
-    })
-
-    await updateStatus(
-      selectedItem.id,
-      inspectionResult === 'passed' ? 'inspection_passed' : 'inspection_failed',
-      inspectionResult === 'passed' ? '验收通过' : `验收不通过：${damageDescription}`
+      inspectionResult === 'passed' ? '商品外观完好，配件齐全，功能正常' : damageDescription,
+      '当前用户'
     )
 
     setSubmitting(false)

@@ -1,18 +1,22 @@
 import { create } from 'zustand'
-import { mockData } from '@/services/mock/data'
-import type { User, UserRole, Alert, AlertStatus, AlertSeverity } from '@/types'
+import { dataService } from '@/services/dataService'
+import type { User, UserRole, Alert, AlertStatus, AlertSeverity, OperationLog } from '@/types'
 
 interface UserState {
   currentUser: User | null
   permissions: string[]
   alerts: Alert[]
+  operationLogs: OperationLog[]
   unreadCount: number
   loading: boolean
   fetchCurrentUser: () => Promise<void>
   fetchAlerts: () => Promise<void>
+  fetchOperationLogs: () => Promise<void>
   markAlertRead: (id: string) => Promise<void>
   markAllAlertsRead: () => Promise<void>
   resolveAlert: (id: string) => Promise<void>
+  subscribeToAlerts: () => () => void
+  subscribeToOperationLogs: () => () => void
   setAlertFilter: (status?: AlertStatus, severity?: AlertSeverity) => void
   alertFilters: {
     status?: AlertStatus
@@ -74,6 +78,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   currentUser: null,
   permissions: [],
   alerts: [],
+  operationLogs: [],
   unreadCount: 0,
   loading: false,
   alertFilters: {},
@@ -90,24 +95,21 @@ export const useUserStore = create<UserState>((set, get) => ({
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
     const { alertFilters } = get()
-    let data = [...mockData.alerts]
+    let data = [...dataService.alerts]
     if (alertFilters.status) {
       data = data.filter(a => a.status === alertFilters.status)
     }
     if (alertFilters.severity) {
       data = data.filter(a => a.severity === alertFilters.severity)
     }
-    const unreadCount = mockData.alerts.filter(a => a.status === 'unread').length
+    const unreadCount = dataService.getUnreadAlertCount()
     set({ alerts: data, unreadCount, loading: false })
   },
 
   markAlertRead: async (id: string) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 200))
-    const alert = mockData.alerts.find(a => a.id === id)
-    if (alert) {
-      alert.status = 'read'
-    }
+    dataService.markAlertRead(id)
     await get().fetchAlerts()
     set({ loading: false })
   },
@@ -115,11 +117,7 @@ export const useUserStore = create<UserState>((set, get) => ({
   markAllAlertsRead: async () => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 300))
-    mockData.alerts.forEach(a => {
-      if (a.status === 'unread') {
-        a.status = 'read'
-      }
-    })
+    dataService.markAllAlertsRead()
     await get().fetchAlerts()
     set({ loading: false })
   },
@@ -127,12 +125,28 @@ export const useUserStore = create<UserState>((set, get) => ({
   resolveAlert: async (id: string) => {
     set({ loading: true })
     await new Promise(resolve => setTimeout(resolve, 200))
-    const alert = mockData.alerts.find(a => a.id === id)
-    if (alert) {
-      alert.status = 'resolved'
-    }
+    dataService.resolveAlert(id)
     await get().fetchAlerts()
     set({ loading: false })
+  },
+
+  subscribeToAlerts: () => {
+    return dataService.subscribe(() => {
+      get().fetchAlerts()
+    })
+  },
+
+  fetchOperationLogs: async () => {
+    set({ loading: true })
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const logs = [...dataService.operationLogs]
+    set({ operationLogs: logs, loading: false })
+  },
+
+  subscribeToOperationLogs: () => {
+    return dataService.subscribe(() => {
+      get().fetchOperationLogs()
+    })
   },
 
   setAlertFilter: (status, severity) => {

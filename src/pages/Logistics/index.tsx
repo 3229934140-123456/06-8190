@@ -67,6 +67,7 @@ export default function Logistics() {
     orderDetail,
     setFilters,
     createOrder,
+    subscribeToUpdates,
   } = useLogisticsStore()
 
   const { list: returnRequests, fetchList: fetchReturns } = useReturnsStore()
@@ -76,6 +77,11 @@ export default function Logistics() {
     fetchCouriers()
     fetchReturns()
   }, [fetchOrders, fetchCouriers, fetchReturns])
+
+  useEffect(() => {
+    const unsubscribe = subscribeToUpdates()
+    return unsubscribe
+  }, [subscribeToUpdates])
 
   useEffect(() => {
     if (selectedOrder) {
